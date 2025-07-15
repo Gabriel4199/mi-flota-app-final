@@ -269,11 +269,20 @@
         // Importa las funciones necesarias de Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Variables globales de Firebase (proporcionadas por el entorno Canvas)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // TU CONFIGURACIÓN DE FIREBASE VA AQUÍ
+        const firebaseConfig = {
+          apiKey: "AIzaSyD3pDRfw0wSU8fZSRUibYSSKEN4xyoImrw",
+          authDomain: "artful-bonito-464618-u9.firebaseapp.com",
+          projectId: "artful-bonito-464618-u9",
+          storageBucket: "artful-bonito-464618-u9.firebasestorage.app",
+          messagingSenderId: "549123808628",
+          appId: "1:549123808628:web:676e8737bb2fb07a2fe021",
+          measurementId: "G-4V71TXLDPD"
+        };
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let app;
@@ -339,6 +348,11 @@
                 displayTrucks();
                 populateTrucksDropdown();
                 document.getElementById('trucksLoading').classList.add('hidden'); // Oculta el cargador
+                if (fleet.length === 0) {
+                    document.getElementById('noTrucksMessage').classList.remove('hidden');
+                } else {
+                    document.getElementById('noTrucksMessage').classList.add('hidden');
+                }
             }, (error) => {
                 console.error("Error al obtener camiones en tiempo real:", error);
                 showMessage('Error al cargar camiones. Intente recargar la página.', 'error');
@@ -443,10 +457,14 @@
             truckListBody.innerHTML = ''; // Limpia la tabla antes de volver a renderizar
 
             const noTrucksMessage = document.getElementById('noTrucksMessage');
+            const trucksLoading = document.getElementById('trucksLoading');
+
             if (fleet.length === 0) {
                 noTrucksMessage.classList.remove('hidden');
+                trucksLoading.classList.add('hidden'); // Asegurarse de que el cargador esté oculto si no hay camiones
             } else {
                 noTrucksMessage.classList.add('hidden');
+                trucksLoading.classList.add('hidden'); // Ocultar el cargador una vez que los datos están presentes
             }
 
             fleet.forEach(truck => {
@@ -501,7 +519,7 @@
             currentTruckId = null; // Reinicia el ID del camión actual
         }
 
-        // Función para eliminar un camión (ahora usa Firestore)
+        // Función para eliminar un camión (ahora usa Firestore y elimina viajes asociados)
         async function deleteTruck(id) {
             if (!isAuthReady) {
                 showMessage('La aplicación no está lista. Intente recargar la página.', 'error');
@@ -527,4 +545,493 @@
                     onConfirm();
                 };
                 document.getElementById('confirmCancelBtn').onclick = () => {
+                    document.getElementById('customConfirmModal').remove();
+                    onCancel();
+                };
+            };
+
+            confirmDelete('¿Estás seguro de que quieres eliminar este camión? También se eliminarán todos los viajes asociados a él. Esta acción no se puede deshacer.', async () => {
+                try {
+                    const truckToDelete = fleet.find(truck => truck.id === id);
+                    if (!truckToDelete) {
+                        showMessage('Camión no encontrado para eliminar.', 'error');
+                        return;
+                    }
+
+                    const truckPlaca = truckToDelete.placa;
+
+                    // 1. Eliminar el documento del camión
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'trucks', id));
+
+                    // 2. Eliminar los viajes asociados a este camión
+                    // NOTA: Firestore no tiene "cascade delete". Debemos eliminar los viajes explícitamente.
+                    const tripsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'trips');
+                    const q = query(tripsCollectionRef, where("placaCamion", "==", truckPlaca));
+                    const querySnapshot = await getDocs(q);
+
+                    const deletePromises = [];
+                    querySnapshot.forEach((tripDoc) => {
+                        deletePromises.push(deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'trips', tripDoc.id)));
+                    });
+
+                    await Promise.all(deletePromises); // Espera a que todas las eliminaciones de viajes se completen
+
+                    showMessage('Camión y sus viajes asociados eliminados exitosamente.', 'success');
+                    closeModal('truckDetailsModal'); // Cierra el modal si estaba abierto para el camión eliminado
+                } catch (e) {
+                    console.error("Error al eliminar camión o viajes asociados: ", e);
+                    showMessage('Error al eliminar camión o viajes. Intente de nuevo.', 'error');
+                }
+            }, () => {
+                showMessage('Eliminación cancelada.', 'info');
+            });
+        }
+
+        // Función para mostrar el historial de mantenimiento de un camión
+        function displayMaintenanceHistory(history) {
+            const maintenanceHistoryDiv = document.getElementById('maintenanceHistory');
+            maintenanceHistoryDiv.innerHTML = ''; // Limpia el historial antes de cargar
+
+            if (history.length === 0) {
+                maintenanceHistoryDiv.innerHTML = '<p class="text-gray-500">No hay historial de mantenimiento para este camión.</p>';
+                return;
+            }
+
+            // Ordenar el historial por fecha (más reciente primero)
+            history.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            history.forEach(item => {
+                const maintenanceEntry = document.createElement('div');
+                maintenanceEntry.classList.add('bg-gray-100', 'p-3', 'rounded-md', 'shadow-sm', 'flex', 'justify-between', 'items-center');
+                maintenanceEntry.innerHTML = `
+                    <div>
+                        <p class="font-medium text-gray-800">${item.date}</p>
+                        <p class="text-sm text-gray-600">${item.description}</p>
+                    </div>
+                    <button onclick="deleteMaintenanceEntry('${currentTruckId}', '${item.id}')" class="text-red-500 hover:text-red-700 text-xl font-bold ml-4">&times;</button>
+                `;
+                maintenanceHistoryDiv.appendChild(maintenanceEntry);
+            });
+        }
+
+        // Función para añadir una entrada al historial de mantenimiento (ahora usa Firestore)
+        document.getElementById('addMaintenanceBtn').addEventListener('click', async function() {
+            if (!isAuthReady || !currentTruckId) {
+                showMessage('La aplicación no está lista o no hay camión seleccionado.', 'error');
+                return;
+            }
+
+            const newMaintenanceDate = document.getElementById('newMaintenanceDate').value;
+            const newMaintenanceDescription = document.getElementById('newMaintenanceDescription').value.trim();
+
+            if (!newMaintenanceDate || !newMaintenanceDescription) {
+                showMessage('Por favor, ingrese la fecha y descripción del mantenimiento.', 'error');
+                return;
+            }
+
+            const truckIndex = fleet.findIndex(t => t.id === currentTruckId);
+            if (truckIndex > -1) {
+                const truck = fleet[truckIndex];
+                const newEntry = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2), // ID único para la entrada de mantenimiento
+                    date: newMaintenanceDate,
+                    description: newMaintenanceDescription
+                };
+
+                // Clona el historial para no modificar el objeto directamente antes de la actualización
+                const updatedHistory = [...(truck.historialMantenimiento || []), newEntry];
+
+                try {
+                    // Actualiza el documento del camión en Firestore
+                    await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'trucks', currentTruckId), {
+                        historialMantenimiento: updatedHistory,
+                        ultimoMantenimiento: newMaintenanceDate // Actualiza la fecha del último mantenimiento
+                    });
+
+                    document.getElementById('newMaintenanceDate').value = '';
+                    document.getElementById('newMaintenanceDescription').value = '';
+                    showMessage('Mantenimiento añadido exitosamente.', 'success');
+                    // onSnapshot se encargará de actualizar la UI
+                } catch (e) {
+                    console.error("Error al añadir mantenimiento: ", e);
+                    showMessage('Error al añadir mantenimiento. Intente de nuevo.', 'error');
+                }
+            } else {
+                showMessage('Error: Camión no encontrado para añadir mantenimiento.', 'error');
+            }
+        });
+
+        // Función para eliminar una entrada del historial de mantenimiento (ahora usa Firestore)
+        async function deleteMaintenanceEntry(truckId, entryId) {
+            if (!isAuthReady) {
+                showMessage('La aplicación no está lista. Intente recargar la página.', 'error');
+                return;
+            }
+
+            const truckIndex = fleet.findIndex(t => t.id === truckId);
+            if (truckIndex > -1) {
+                const truck = fleet[truckIndex];
+                const updatedHistory = (truck.historialMantenimiento || []).filter(entry => entry.id !== entryId);
+
+                let latestMaintenanceDate = 'N/A';
+                if (updatedHistory.length > 0) {
+                    // Encuentra la fecha más reciente en el historial restante
+                    const latestMaintenance = updatedHistory.reduce((prev, current) => {
+                        return (new Date(prev.date) > new Date(current.date)) ? prev : current;
+                    });
+                    latestMaintenanceDate = latestMaintenance.date;
+                }
+
+                try {
+                    // Actualiza el documento del camión en Firestore
+                    await updateDoc(doc(db, 'artifacts', appId, 'users', userId, 'trucks', truckId), {
+                        historialMantenimiento: updatedHistory,
+                        ultimoMantenimiento: latestMaintenanceDate
+                    });
+                    showMessage('Entrada de mantenimiento eliminada.', 'success');
+                    // onSnapshot se encargará de actualizar la UI
+                } catch (e) {
+                    console.error("Error al eliminar mantenimiento: ", e);
+                    showMessage('Error al eliminar mantenimiento. Intente de nuevo.', 'error');
+                }
+            } else {
+                showMessage('Error: Camión no encontrado para eliminar mantenimiento.', 'error');
+            }
+        }
+
+        // --- Funcionalidades de Registro de Viajes ---
+
+        // Función para poblar el dropdown de camiones en el formulario de viajes (usa 'fleet' de Firestore)
+        function populateTrucksDropdown() {
+            const selectElement = document.getElementById('tripPlacaCamion');
+            selectElement.innerHTML = '<option value="">Seleccione un camión</option>'; // Limpia y añade la opción predeterminada
+
+            fleet.forEach(truck => {
+                const option = document.createElement('option');
+                option.value = truck.placa;
+                option.textContent = `${truck.placa} (${truck.marca} ${truck.modelo})`;
+                selectElement.appendChild(option);
+            });
+        }
+
+        // Event listener para el formulario de registro de viajes (ahora usa Firestore)
+        document.getElementById('addTripForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            if (!isAuthReady) {
+                showMessage('La aplicación no está lista. Intente recargar la página.', 'error');
+                return;
+            }
+
+            const fechaSalida = document.getElementById('tripFechaSalida').value;
+            const nombreConductor = document.getElementById('tripNombreConductor').value.trim();
+            const placaCamion = document.getElementById('tripPlacaCamion').value;
+            const patenteTolva = document.getElementById('tripPatenteTolva').value.trim();
+            const patenteSilo = document.getElementById('tripPatenteSilo').value.trim();
+            const destino = document.getElementById('tripDestino').value.trim();
+            const kmSalida = parseFloat(document.getElementById('tripKmSalida').value);
+            const kmLlegada = parseFloat(document.getElementById('tripKmLlegada').value);
+            const cantidadCombustible = parseFloat(document.getElementById('tripCantidadCombustible').value);
+            const diaLlegada = document.getElementById('tripDiaLlegada').value;
+            const horaLlegada = document.getElementById('tripHoraLlegada').value;
+
+            // Validaciones
+            if (!fechaSalida || !nombreConductor || !placaCamion || !destino || isNaN(kmSalida) || isNaN(kmLlegada) || isNaN(cantidadCombustible) || !diaLlegada || !horaLlegada) {
+                showMessage('Por favor, complete todos los campos obligatorios del viaje.', 'error');
+                return;
+            }
+
+            if (kmLlegada < kmSalida) {
+                showMessage('El kilometraje de llegada no puede ser menor que el de salida.', 'error');
+                return;
+            }
+            if (cantidadCombustible <= 0) {
+                showMessage('La cantidad de combustible debe ser mayor a cero.', 'error');
+                return;
+            }
+
+            const kmRecorridos = kmLlegada - kmSalida;
+            const rendimiento = cantidadCombustible > 0 ? (kmRecorridos / cantidadCombustible).toFixed(2) : 'N/A';
+
+            const newTripData = {
+                fechaSalida: fechaSalida,
+                nombreConductor: nombreConductor,
+                placaCamion: placaCamion,
+                patenteTolva: patenteTolva,
+                patenteSilo: patenteSilo,
+                destino: destino,
+                kmSalida: kmSalida,
+                kmLlegada: kmLlegada,
+                kmRecorridos: kmRecorridos,
+                cantidadCombustible: cantidadCombustible,
+                rendimiento: rendimiento,
+                diaLlegada: diaLlegada,
+                horaLlegada: horaLlegada
+            };
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'trips'), newTripData);
+                this.reset();
+                showMessage('Viaje registrado exitosamente!', 'success');
+            } catch (e) {
+                console.error("Error al registrar viaje: ", e);
+                showMessage('Error al registrar viaje. Intente de nuevo.', 'error');
+            }
+        });
+
+        // --- Funcionalidades de Reportes (usan 'trips' que se sincroniza con Firestore) ---
+
+        // Función para generar el reporte diario
+        function generateDailyReport() {
+            const fechaReporte = document.getElementById('reporteDiarioFecha').value;
+            const resultadoDiv = document.getElementById('reporteDiarioResultado');
+            resultadoDiv.innerHTML = ''; // Limpia el contenido anterior
+
+            if (!fechaReporte) {
+                resultadoDiv.innerHTML = '<p class="text-red-500">Por favor, selecciona una fecha para el reporte diario.</p>';
+                return;
+            }
+
+            const tripsDelDia = trips.filter(trip => trip.fechaSalida === fechaReporte || trip.diaLlegada === fechaReporte);
+
+            if (tripsDelDia.length === 0) {
+                resultadoDiv.innerHTML = `<p class="text-gray-500">No hay viajes registrados para el día ${fechaReporte}.</p>`;
+                return;
+            }
+
+            let totalCamionesSalieron = new Set();
+            let totalCombustibleConsumido = 0;
+            let totalKmRecorridosDia = 0;
+            let combustiblePorCamion = {};
+            let rendimientoPorCamion = {};
+            let vueltasPorCamion = {};
+            let vueltasPorConductorCamion = {};
+            let destinosVisitados = {};
+
+            tripsDelDia.forEach(trip => {
+                totalCamionesSalieron.add(trip.placaCamion);
+                totalCombustibleConsumido += trip.cantidadCombustible;
+                totalKmRecorridosDia += trip.kmRecorridos;
+
+                // Combustible por camión
+                combustiblePorCamion[trip.placaCamion] = (combustiblePorCamion[trip.placaCamion] || 0) + trip.cantidadCombustible;
+
+                // Rendimiento por camión
+                rendimientoPorCamion[trip.placaCamion] = rendimientoPorCamion[trip.placaCamion] || { km: 0, combustible: 0 };
+                rendimientoPorCamion[trip.placaCamion].km += trip.kmRecorridos;
+                rendimientoPorCamion[trip.placaCamion].combustible += trip.cantidadCombustible;
+
+                // Vueltas por camión
+                vueltasPorCamion[trip.placaCamion] = (vueltasPorCamion[trip.placaCamion] || 0) + 1;
+
+                // Vueltas por conductor y por camión
+                const keyConductorCamion = `${trip.nombreConductor}-${trip.placaCamion}`;
+                vueltasPorConductorCamion[keyConductorCamion] = (vueltasPorConductorCamion[keyConductorCamion] || 0) + 1;
+
+                // Destinos visitados
+                destinosVisitados[trip.destino] = (destinosVisitados[trip.destino] || 0) + 1;
+            });
+
+            // Rendimiento de la flota para el día
+            const rendimientoFlotaDia = totalCombustibleConsumido > 0 ? (totalKmRecorridosDia / totalCombustibleConsumido).toFixed(2) : 'N/A';
+
+            let reporteHtml = `
+                <h4 class="text-lg font-bold text-gray-800 mb-3">Reporte Diario para el ${fechaReporte}</h4>
+                <p><strong>Cantidad total de camiones que salieron:</strong> ${totalCamionesSalieron.size}</p>
+                <p><strong>Cantidad total de combustible consumido:</strong> ${totalCombustibleConsumido.toFixed(2)} L</p>
+                <p><strong>Rendimiento de la flota (total):</strong> ${rendimientoFlotaDia} km/L</p>
+                <h5 class="font-semibold mt-4 mb-2">Combustible y Rendimiento por Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+
+            for (const placa in combustiblePorCamion) {
+                const totalKm = rendimientoPorCamion[placa].km;
+                const totalComb = rendimientoPorCamion[placa].combustible;
+                const r = totalComb > 0 ? (totalKm / totalComb).toFixed(2) : 'N/A';
+                reporteHtml += `<li><strong>${placa}:</strong> ${combustiblePorCamion[placa].toFixed(2)} L consumidos, Rendimiento: ${r} km/L</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Vueltas por Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const placa in vueltasPorCamion) {
+                reporteHtml += `<li><strong>${placa}:</strong> ${vueltasPorCamion[placa]} vueltas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Vueltas por Conductor y Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const key in vueltasPorConductorCamion) {
+                const [conductor, placa] = key.split('-');
+                reporteHtml += `<li><strong>${conductor} (${placa}):</strong> ${vueltasPorConductorCamion[key]} vueltas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Destinos Visitados:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const destino in destinosVisitados) {
+                reporteHtml += `<li><strong>${destino}:</strong> ${destinosVisitados[destino]} visitas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            resultadoDiv.innerHTML = reporteHtml;
+        }
+
+        // Función para generar el reporte mensual
+        function generateMonthlyReport() {
+            const anioReporte = document.getElementById('reporteMensualAnio').value;
+            const mesReporte = document.getElementById('reporteMensualMes').value;
+            const resultadoDiv = document.getElementById('reporteMensualResultado');
+            resultadoDiv.innerHTML = ''; // Limpia el contenido anterior
+
+            if (!anioReporte || !mesReporte) {
+                resultadoDiv.innerHTML = '<p class="text-red-500">Por favor, selecciona un mes y año para el reporte mensual.</p>';
+                return;
+            }
+
+            const tripsDelMes = trips.filter(trip => {
+                const tripDate = new Date(trip.fechaSalida);
+                return tripDate.getFullYear() == anioReporte && (tripDate.getMonth() + 1) == mesReporte;
+            });
+
+            if (tripsDelMes.length === 0) {
+                resultadoDiv.innerHTML = `<p class="text-gray-500">No hay viajes registrados para ${mesReporte}/${anioReporte}.</p>`;
+                return;
+            }
+
+            let totalCamionesSalieronMes = new Set();
+            let totalCombustibleConsumidoMes = 0;
+            let totalKmRecorridosMes = 0;
+            let combustiblePorCamionMes = {};
+            let rendimientoPorCamionMes = {};
+            let vueltasPorCamionMes = {};
+            let vueltasPorConductorCamionMes = {};
+            let destinosVisitadosMes = {};
+
+            tripsDelMes.forEach(trip => {
+                totalCamionesSalieronMes.add(trip.placaCamion);
+                totalCombustibleConsumidoMes += trip.cantidadCombustible;
+                totalKmRecorridosMes += trip.kmRecorridos;
+
+                combustiblePorCamionMes[trip.placaCamion] = (combustiblePorCamionMes[trip.placaCamion] || 0) + trip.cantidadCombustible;
+
+                rendimientoPorCamionMes[trip.placaCamion] = rendimientoPorCamionMes[trip.placaCamion] || { km: 0, combustible: 0 };
+                rendimientoPorCamionMes[trip.placaCamion].km += trip.kmRecorridos;
+                rendimientoPorCamionMes[trip.placaCamion].combustible += trip.cantidadCombustible;
+
+                vueltasPorCamionMes[trip.placaCamion] = (vueltasPorCamionMes[trip.placaCamion] || 0) + 1;
+
+                const keyConductorCamion = `${trip.nombreConductor}-${trip.placaCamion}`;
+                vueltasPorConductorCamionMes[keyConductorCamion] = (vueltasPorConductorCamionMes[keyConductorCamion] || 0) + 1;
+
+                destinosVisitadosMes[trip.destino] = (destinosVisitadosMes[trip.destino] || 0) + 1;
+            });
+
+            // Rendimiento de la flota para el mes
+            const rendimientoFlotaMes = totalCombustibleConsumidoMes > 0 ? (totalKmRecorridosMes / totalCombustibleConsumidoMes).toFixed(2) : 'N/A';
+
+            let reporteHtml = `
+                <h4 class="text-lg font-bold text-gray-800 mb-3">Reporte Mensual para ${mesReporte}/${anioReporte}</h4>
+                <p><strong>Cantidad total de camiones que salieron:</strong> ${totalCamionesSalieronMes.size}</p>
+                <p><strong>Cantidad total de combustible consumido:</strong> ${totalCombustibleConsumidoMes.toFixed(2)} L</p>
+                <p><strong>Rendimiento de la flota (total):</strong> ${rendimientoFlotaMes} km/L</p>
+                <h5 class="font-semibold mt-4 mb-2">Combustible y Rendimiento por Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+
+            for (const placa in combustiblePorCamionMes) {
+                const totalKm = rendimientoPorCamionMes[placa].km;
+                const totalComb = rendimientoPorCamionMes[placa].combustible;
+                const r = totalComb > 0 ? (totalKm / totalComb).toFixed(2) : 'N/A';
+                reporteHtml += `<li><strong>${placa}:</strong> ${combustiblePorCamionMes[placa].toFixed(2)} L consumidos, Rendimiento: ${r} km/L</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Vueltas por Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const placa in vueltasPorCamionMes) {
+                reporteHtml += `<li><strong>${placa}:</strong> ${vueltasPorCamionMes[placa]} vueltas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Vueltas por Conductor y Camión:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const key in vueltasPorConductorCamionMes) {
+                const [conductor, placa] = key.split('-');
+                reporteHtml += `<li><strong>${conductor} (${placa}):</strong> ${vueltasPorConductorCamionMes[key]} vueltas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            reporteHtml += `
+                <h5 class="font-semibold mt-4 mb-2">Destinos Visitados:</h5>
+                <ul class="list-disc list-inside ml-4">
+            `;
+            for (const destino in destinosVisitadosMes) {
+                reporteHtml += `<li><strong>${destino}:</strong> ${destinosVisitadosMes[destino]} visitas</li>`;
+            }
+            reporteHtml += `</ul>`;
+
+            resultadoDiv.innerHTML = reporteHtml;
+        }
+
+
+        // Carga inicial de camiones y poblar el dropdown
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeFirebase(); // Inicia Firebase al cargar la página
+
+            // Establece la fecha actual en el campo de reporte diario
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('reporteDiarioFecha').value = today;
+
+            // Establece el mes y año actual en el campo de reporte mensual
+            const currentMonth = new Date().getMonth() + 1;
+            const currentYear = new Date().getFullYear();
+            document.getElementById('reporteMensualMes').value = currentMonth;
+            document.getElementById('reporteMensualAnio').value = currentYear;
+        });
+
+    </script>
+</body>
+</html>
+
+       
+
+        
+                   
+                   
+                   
+
+      
+                       
+         
+
+   
+       
+
+      
+                 
+                      
+                       
+             
+   
+              
+        
+         
+
+      
+       
+                
+           
+               
+    
+                              
                     document.getElementById('customConfirmModal').remove
