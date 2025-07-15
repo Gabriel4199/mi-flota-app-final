@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Flota de Camiones</title>
+    <!-- Carga de Tailwind CSS CDN para estilos rápidos y responsivos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Fondo gris claro */
+            color: #374151; /* Color de texto principal */
+        }
+        /* Estilos para el scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e0e0e0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a0a0a0;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #808080;
+        }
+        /* Estilo para el spinner de carga */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8 lg:p-10">
+
+    <div class="max-w-7xl mx-auto bg-white shadow-xl rounded-xl p-6 sm:p-8 lg:p-10">
+        <h1 class="text-3xl sm:text-4xl font-bold text-center text-indigo-700 mb-8">Asistente de Flota de Camiones</h1>
+
+        <!-- Muestra el ID de usuario actual para fines de depuración/identificación -->
+        <div class="text-center text-sm text-gray-500 mb-4">
+            ID de Usuario: <span id="currentUserId">Cargando...</span>
+        </div>
+
+        <!-- Sección para añadir un nuevo camión -->
+        <div class="mb-10 p-6 bg-indigo-50 rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold text-indigo-600 mb-6">Agregar Nuevo Camión</h2>
+            <form id="addTruckForm" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="placa" class="block text-sm font-medium text-gray-700 mb-1">Placa:</label>
+                    <input type="text" id="placa" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="marca" class="block text-sm font-medium text-gray-700 mb-1">Marca:</label>
+                    <input type="text" id="marca" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="modelo" class="block text-sm font-medium text-gray-700 mb-1">Modelo:</label>
+                    <input type="text" id="modelo" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="anio" class="block text-sm font-medium text-gray-700 mb-1">Año:</label>
+                    <input type="number" id="anio" required min="1900" max="2099" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="capacidad" class="block text-sm font-medium text-gray-700 mb-1">Capacidad (kg):</label>
+                    <input type="number" id="capacidad" required min="1" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="ultimoMantenimiento" class="block text-sm font-medium text-gray-700 mb-1">Último Mantenimiento:</label>
+                    <input type="date" id="ultimoMantenimiento" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div class="md:col-span-2 flex justify-center mt-4">
+                    <button type="submit" id="addTruckBtn" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-md shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition ease-in-out duration-150">
+                        Agregar Camión
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sección de registro de viajes -->
+        <div class="mb-10 p-6 bg-blue-50 rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold text-blue-600 mb-6">Registro de Viajes</h2>
+            <form id="addTripForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    <label for="tripFechaSalida" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Salida:</label>
+                    <input type="date" id="tripFechaSalida" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripNombreConductor" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Conductor:</label>
+                    <input type="text" id="tripNombreConductor" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripPlacaCamion" class="block text-sm font-medium text-gray-700 mb-1">Placa del Camión:</label>
+                    <select id="tripPlacaCamion" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        <option value="">Seleccione un camión</option>
+                        <!-- Opciones de camiones se cargarán aquí dinámicamente -->
+                    </select>
+                </div>
+                <div>
+                    <label for="tripPatenteTolva" class="block text-sm font-medium text-gray-700 mb-1">Patente de la Tolva:</label>
+                    <input type="text" id="tripPatenteTolva" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripPatenteSilo" class="block text-sm font-medium text-gray-700 mb-1">Patente del Silo:</label>
+                    <input type="text" id="tripPatenteSilo" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripDestino" class="block text-sm font-medium text-gray-700 mb-1">Destino:</label>
+                    <input type="text" id="tripDestino" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripKmSalida" class="block text-sm font-medium text-gray-700 mb-1">Kilometraje de Salida:</label>
+                    <input type="number" id="tripKmSalida" required min="0" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripKmLlegada" class="block text-sm font-medium text-gray-700 mb-1">Kilometraje de Llegada:</label>
+                    <input type="number" id="tripKmLlegada" required min="0" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripCantidadCombustible" class="block text-sm font-medium text-gray-700 mb-1">Combustible (L):</label>
+                    <input type="number" id="tripCantidadCombustible" required min="0" step="0.01" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                 <div>
+                    <label for="tripDiaLlegada" class="block text-sm font-medium text-gray-700 mb-1">Día de Llegada:</label>
+                    <input type="date" id="tripDiaLlegada" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="tripHoraLlegada" class="block text-sm font-medium text-gray-700 mb-1">Hora de Llegada:</label>
+                    <input type="time" id="tripHoraLlegada" required class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                <div class="lg:col-span-3 flex justify-center mt-4">
+                    <button type="submit" id="addTripBtn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-md shadow-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition ease-in-out duration-150">
+                        Registrar Viaje
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Sección de lista de camiones (existente) -->
+        <div class="p-6 bg-white rounded-lg shadow-md mb-10">
+            <h2 class="text-2xl font-semibold text-indigo-600 mb-6">Lista de Camiones</h2>
+            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Marca</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modelo</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Año</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="truckList" class="bg-white divide-y divide-gray-200">
+                        <!-- Aquí se cargarán los camiones -->
+                        <tr>
+                            <td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">
+                                <div id="trucksLoading" class="flex justify-center items-center py-4">
+                                    <div class="loader mr-2"></div> Cargando camiones...
+                                </div>
+                                <p id="noTrucksMessage" class="hidden">No hay camiones registrados aún. ¡Agrega uno!</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de reportes de operación -->
+        <div class="p-6 bg-green-50 rounded-lg shadow-md">
+            <h2 class="text-2xl font-semibold text-green-600 mb-6">Reportes de Operación</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <!-- Reporte Diario -->
+                <div class="p-4 bg-white rounded-lg shadow-sm border border-green-200">
+                    <h3 class="text-xl font-semibold text-green-700 mb-4">Resumen Diario</h3>
+                    <div class="flex flex-col sm:flex-row gap-3 items-center mb-4">
+                        <label for="reporteDiarioFecha" class="text-sm font-medium text-gray-700">Fecha:</label>
+                        <input type="date" id="reporteDiarioFecha" class="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm">
+                        <button onclick="generateDailyReport()" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
+                            Generar Reporte Diario
+                        </button>
+                    </div>
+                    <div id="reporteDiarioResultado" class="mt-4 text-gray-700 text-sm bg-gray-50 p-4 rounded-md border border-gray-200 min-h-[100px] overflow-auto">
+                        <p class="text-center text-gray-500">Selecciona una fecha y haz clic en "Generar Reporte Diario".</p>
+                    </div>
+                </div>
+
+                <!-- Reporte Mensual -->
+                <div class="p-4 bg-white rounded-lg shadow-sm border border-green-200">
+                    <h3 class="text-xl font-semibold text-green-700 mb-4">Resumen Mensual</h3>
+                    <div class="flex flex-col sm:flex-row gap-3 items-center mb-4">
+                        <label for="reporteMensualAnio" class="text-sm font-medium text-gray-700">Año:</label>
+                        <input type="number" id="reporteMensualAnio" min="2000" max="2099" value="2024" class="w-24 px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm">
+                        <label for="reporteMensualMes" class="text-sm font-medium text-gray-700">Mes:</label>
+                        <select id="reporteMensualMes" class="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm">
+                            <option value="1">Enero</option>
+                            <option value="2">Febrero</option>
+                            <option value="3">Marzo</option>
+                            <option value="4">Abril</option>
+                            <option value="5">Mayo</option>
+                            <option value="6">Junio</option>
+                            <option value="7">Julio</option>
+                            <option value="8">Agosto</option>
+                            <option value="9">Septiembre</option>
+                            <option value="10">Octubre</option>
+                            <option value="11">Noviembre</option>
+                            <option value="12">Diciembre</option>
+                        </select>
+                        <button onclick="generateMonthlyReport()" class="px-5 py-2 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
+                            Generar Reporte Mensual
+                        </button>
+                    </div>
+                    <div id="reporteMensualResultado" class="mt-4 text-gray-700 text-sm bg-gray-50 p-4 rounded-md border border-gray-200 min-h-[100px] overflow-auto">
+                        <p class="text-center text-gray-500">Selecciona un mes y año y haz clic en "Generar Reporte Mensual".</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para detalles del camión (existente) -->
+    <div id="truckDetailsModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+            <button class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-2xl font-bold" onclick="closeModal('truckDetailsModal')">&times;</button>
+            <h3 class="text-2xl font-bold text-indigo-700 mb-4" id="modalTruckPlaca"></h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-gray-700 mb-6">
+                <p><strong>Marca:</strong> <span id="modalTruckMarca"></span></p>
+                <p><strong>Modelo:</strong> <span id="modalTruckModelo"></span></p>
+                <p><strong>Año:</strong> <span id="modalTruckAnio"></span></p>
+                <p><strong>Capacidad:</strong> <span id="modalTruckCapacidad"></span> kg</p>
+                <p><strong>Último Mantenimiento:</strong> <span id="modalTruckUltimoMantenimiento"></span></p>
+                <p><strong>Próximo Mantenimiento:</strong> <span id="modalTruckProximoMantenimiento"></span></p>
+            </div>
+
+            <h4 class="text-xl font-semibold text-indigo-600 mb-3">Historial de Mantenimiento</h4>
+            <div id="maintenanceHistory" class="space-y-3 mb-6">
+                <!-- Historial de mantenimiento se cargará aquí -->
+            </div>
+
+            <h4 class="text-xl font-semibold text-indigo-600 mb-3">Agregar Mantenimiento</h4>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input type="date" id="newMaintenanceDate" class="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <input type="text" id="newMaintenanceDescription" placeholder="Descripción del mantenimiento" class="flex-grow px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <button id="addMaintenanceBtn" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition ease-in-out duration-150">
+                    Añadir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mensaje de confirmación/alerta personalizado (existente) -->
+    <div id="messageBox" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transition-opacity duration-300 ease-out opacity-0">
+        <p id="messageText"></p>
+    </div>
+
+    <script type="module">
+        // Importa las funciones necesarias de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variables globales de Firebase (proporcionadas por el entorno Canvas)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false; // Bandera para indicar que la autenticación está lista
+
+        // Arrays para almacenar los datos, ahora se sincronizarán con Firestore
+        let fleet = [];
+        let trips = [];
+
+        let currentTruckId = null; // Para saber qué camión se está viendo en el modal
+
+        // Inicializa Firebase y configura la autenticación
+        async function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Escucha los cambios en el estado de autenticación
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('currentUserId').textContent = userId;
+                        isAuthReady = true;
+                        console.log("Usuario autenticado:", userId);
+                        // Una vez autenticado, inicia los listeners de Firestore
+                        setupFirestoreListeners();
+                    } else {
+                        // Si no hay usuario, intenta iniciar sesión anónimamente o con el token proporcionado
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error al autenticar:", error);
+                            showMessage('Error al iniciar sesión. Intente recargar la página.', 'error');
+                            document.getElementById('currentUserId').textContent = 'Error de autenticación';
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error al inicializar Firebase:", error);
+                showMessage('Error al inicializar la aplicación. Verifique la configuración.', 'error');
+            }
+        }
+
+        // Configura los listeners de Firestore para camiones y viajes
+        function setupFirestoreListeners() {
+            if (!isAuthReady || !userId) {
+                console.warn("Firestore listeners no se pueden configurar: autenticación no lista o userId no disponible.");
+                return;
+            }
+
+            // Listener para la colección de camiones
+            const trucksCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'trucks');
+            onSnapshot(trucksCollectionRef, (snapshot) => {
+                fleet = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                displayTrucks();
+                populateTrucksDropdown();
+                document.getElementById('trucksLoading').classList.add('hidden'); // Oculta el cargador
+            }, (error) => {
+                console.error("Error al obtener camiones en tiempo real:", error);
+                showMessage('Error al cargar camiones. Intente recargar la página.', 'error');
+                document.getElementById('trucksLoading').classList.add('hidden');
+                document.getElementById('noTrucksMessage').classList.remove('hidden');
+                document.getElementById('noTrucksMessage').textContent = 'Error al cargar camiones.';
+            });
+
+            // Listener para la colección de viajes
+            const tripsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'trips');
+            onSnapshot(tripsCollectionRef, (snapshot) => {
+                trips = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log("Viajes actualizados:", trips); // Para depuración
+            }, (error) => {
+                console.error("Error al obtener viajes en tiempo real:", error);
+                showMessage('Error al cargar viajes.', 'error');
+            });
+        }
+
+
+        // Función para mostrar mensajes al usuario (reemplaza alert())
+        function showMessage(message, type = 'info') {
+            const messageBox = document.getElementById('messageBox');
+            const messageText = document.getElementById('messageText');
+            messageText.textContent = message;
+
+            // Reinicia clases de color
+            messageBox.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-800');
+
+            // Establece el color según el tipo de mensaje
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-600');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-600');
+            } else {
+                messageBox.classList.add('bg-gray-800');
+            }
+
+            messageBox.classList.remove('hidden', 'opacity-0');
+            messageBox.classList.add('opacity-100');
+
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0');
+                setTimeout(() => {
+                    messageBox.classList.add('hidden');
+                }, 300); // Espera a que termine la transición de opacidad
+            }, 3000); // El mensaje desaparece después de 3 segundos
+        }
+
+        // Función para añadir un nuevo camión a la flota (ahora usa Firestore)
+        document.getElementById('addTruckForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            if (!isAuthReady) {
+                showMessage('La aplicación no está lista. Intente recargar la página.', 'error');
+                return;
+            }
+
+            const placa = document.getElementById('placa').value.trim();
+            const marca = document.getElementById('marca').value.trim();
+            const modelo = document.getElementById('modelo').value.trim();
+            const anio = parseInt(document.getElementById('anio').value);
+            const capacidad = parseFloat(document.getElementById('capacidad').value);
+            const ultimoMantenimiento = document.getElementById('ultimoMantenimiento').value;
+
+            if (!placa || !marca || !modelo || isNaN(anio) || isNaN(capacidad)) {
+                showMessage('Por favor, complete todos los campos obligatorios para el camión.', 'error');
+                return;
+            }
+
+            // Verificar si la placa ya existe localmente (Firestore se encargará de la unicidad a nivel de documento si la placa fuera el ID)
+            if (fleet.some(truck => truck.placa === placa)) {
+                showMessage('Ya existe un camión con esta placa.', 'error');
+                return;
+            }
+
+            const newTruckData = {
+                placa: placa,
+                marca: marca,
+                modelo: modelo,
+                anio: anio,
+                capacidad: capacidad,
+                ultimoMantenimiento: ultimoMantenimiento || 'N/A',
+                historialMantenimiento: []
+            };
+
+            try {
+                // Añade un nuevo documento a la colección 'trucks'
+                const docRef = await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'trucks'), newTruckData);
+                console.log("Camión añadido con ID: ", docRef.id);
+                this.reset();
+                showMessage('Camión añadido exitosamente!', 'success');
+            } catch (e) {
+                console.error("Error al añadir camión: ", e);
+                showMessage('Error al añadir camión. Intente de nuevo.', 'error');
+            }
+        });
+
+        // Función para mostrar los camiones en la tabla (ahora se actualiza por onSnapshot)
+        function displayTrucks() {
+            const truckListBody = document.getElementById('truckList');
+            truckListBody.innerHTML = ''; // Limpia la tabla antes de volver a renderizar
+
+            const noTrucksMessage = document.getElementById('noTrucksMessage');
+            if (fleet.length === 0) {
+                noTrucksMessage.classList.remove('hidden');
+            } else {
+                noTrucksMessage.classList.add('hidden');
+            }
+
+            fleet.forEach(truck => {
+                const row = truckListBody.insertRow();
+                row.classList.add('hover:bg-gray-50');
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${truck.placa}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${truck.marca}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${truck.modelo}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${truck.anio}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="viewTruckDetails('${truck.id}')" class="text-indigo-600 hover:text-indigo-900 mr-3 px-3 py-1 rounded-md border border-indigo-600 hover:border-indigo-900 transition-colors duration-150">Ver Detalles</button>
+                        <button onclick="deleteTruck('${truck.id}')" class="text-red-600 hover:text-red-900 px-3 py-1 rounded-md border border-red-600 hover:border-red-900 transition-colors duration-150">Eliminar</button>
+                    </td>
+                `;
+            });
+        }
+
+        // Función para ver los detalles de un camión en el modal (obtiene datos de 'fleet' que ya está sincronizado)
+        function viewTruckDetails(id) {
+            currentTruckId = id;
+            const truck = fleet.find(t => t.id === id);
+
+            if (truck) {
+                document.getElementById('modalTruckPlaca').textContent = truck.placa;
+                document.getElementById('modalTruckMarca').textContent = truck.marca;
+                document.getElementById('modalTruckModelo').textContent = truck.modelo;
+                document.getElementById('modalTruckAnio').textContent = truck.anio;
+                document.getElementById('modalTruckCapacidad').textContent = truck.capacidad;
+                document.getElementById('modalTruckUltimoMantenimiento').textContent = truck.ultimoMantenimiento;
+
+                // Calcular y mostrar el próximo mantenimiento (ejemplo: 6 meses después del último)
+                if (truck.ultimoMantenimiento !== 'N/A' && truck.ultimoMantenimiento) {
+                    const lastMaintenanceDate = new Date(truck.ultimoMantenimiento);
+                    lastMaintenanceDate.setMonth(lastMaintenanceDate.getMonth() + 6); // Suma 6 meses
+                    document.getElementById('modalTruckProximoMantenimiento').textContent = lastMaintenanceDate.toISOString().split('T')[0];
+                } else {
+                    document.getElementById('modalTruckProximoMantenimiento').textContent = 'No disponible';
+                }
+
+                displayMaintenanceHistory(truck.historialMantenimiento || []); // Asegura que historialMantenimiento exista
+                document.getElementById('truckDetailsModal').classList.remove('hidden');
+            } else {
+                showMessage('Camión no encontrado.', 'error');
+            }
+        }
+
+        // Función para cerrar el modal
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            currentTruckId = null; // Reinicia el ID del camión actual
+        }
+
+        // Función para eliminar un camión (ahora usa Firestore)
+        async function deleteTruck(id) {
+            if (!isAuthReady) {
+                showMessage('La aplicación no está lista. Intente recargar la página.', 'error');
+                return;
+            }
+
+            const confirmDelete = (message, onConfirm, onCancel) => {
+                const modalHtml = `
+                    <div id="customConfirmModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm relative">
+                            <p class="text-lg font-semibold text-gray-800 mb-6">${message}</p>
+                            <div class="flex justify-end space-x-4">
+                                <button id="confirmCancelBtn" class="px-5 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition-colors duration-150">Cancelar</button>
+                                <button id="confirmOkBtn" class="px-5 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors duration-150">Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+                document.getElementById('confirmOkBtn').onclick = () => {
+                    document.getElementById('customConfirmModal').remove();
+                    onConfirm();
+                };
+                document.getElementById('confirmCancelBtn').onclick = () => {
+                    document.getElementById('customConfirmModal').remove
